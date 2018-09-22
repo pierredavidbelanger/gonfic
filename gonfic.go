@@ -96,6 +96,9 @@ func (s *fileSource) Override(config map[string]interface{}) (map[string]interfa
 		return nil, fmt.Errorf("cannot read: %s", err)
 	}
 	ext := filepath.Ext(s.path)
+	if strings.HasPrefix(ext, ".") {
+		ext = strings.TrimPrefix(ext, ".")
+	}
 	bufSource := NewBufSource(buf, ext)
 	return bufSource.Override(config)
 }
