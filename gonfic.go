@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mitchellh/mapstructure"
-	"github.com/wolfeidau/unflatten"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"github.com/ghodss/yaml"
+	"reflect"
+	"time"
 )
 
 // Source is the interface implemented by types
@@ -50,13 +51,29 @@ func (c *Config) ToFlatMap() map[string]interface{} {
 // ToHierarchicalMap returns the keys and values in the config in a hierarchical map,
 // so when repeating config path are agglomerated (think JSON).
 func (c *Config) ToHierarchicalMap() map[string]interface{} {
-	return unflatten.Unflatten(c.ToFlatMap(), unflatten.SplitByDot)
+	return unflatten(c.ToFlatMap(), dotSlicer)
 }
 
 // Unmarshal the keys and values as an hierarchical map
 // and stores the result in the value pointed to by v.
 func (c *Config) Unmarshal(v interface{}) error {
-	return mapstructure.Decode(c.ToHierarchicalMap(), v)
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: decodeHook,
+		WeaklyTypedInput: true,
+		Result: v,
+	})
+	if err != nil {
+		return err
+	}
+	return dec.Decode(c.ToHierarchicalMap())
+}
+
+func decodeHook(srcType  reflect.Type, dstType reflect.Type, v interface{}) (interface{}, error) {
+	// not sure this is the way to go
+	if srcType.Kind() == reflect.String && dstType.String() == "time.Duration" {
+		return time.ParseDuration(v.(string))
+	}
+	return v, nil
 }
 
 type envSource struct {
@@ -127,8 +144,7 @@ func readBuf(buf []byte, ext string) (map[string]interface{}, error) {
 	var fn func([]byte) (map[string]interface{}, error)
 	switch ext {
 	case "js", "json":
-		fn = readJson
-		break
+		fallthrough
 	case "yml", "yaml":
 		fn = readYaml
 		break
@@ -156,6 +172,47 @@ func readUnmarshalableBuf(buf []byte, unmarshal func([]byte, interface{}) error)
 	if err != nil {
 		return nil, fmt.Errorf("cannot unmarshall: %s", err)
 	}
-	fm := unflatten.Flatten(m, unflatten.JoinWithDot)
+	fm := flatten(m, dotJoiner)
 	return fm, nil
+}
+
+var dotJoiner = func(a []string) string { return strings.Join(a, ".") }
+
+var dotSlicer = func(s string) []string { return strings.Split(s, ".") }
+
+func unflatten(flatmap map[string]interface{}, slicer func(string) []string) map[string]interface{} {
+	var unflatmap = make(map[string]interface{})
+	for flatkey, value := range flatmap {
+		keys := slicer(flatkey)
+		subunflatmap := unflatmap
+		for _, key := range keys[:len(keys)-1] {
+			node, ok := subunflatmap[key]
+			if !ok {
+				node = make(map[string]interface{})
+				subunflatmap[key] = node
+			}
+			subunflatmap = node.(map[string]interface{})
+		}
+		subunflatmap[keys[len(keys)-1]] = value
+	}
+	return unflatmap
+}
+
+func flatten(unflatmap map[string]interface{}, joiner func([]string) string) map[string]interface{} {
+	var flatmap = make(map[string]interface{})
+	flattenrec(unflatmap, []string{}, func(keys []string, value interface{}) {
+		flatmap[joiner(keys)] = value
+	})
+	return flatmap
+}
+
+func flattenrec(unflatmap map[string]interface{}, keys []string, adder func(keys []string, value interface{})) {
+	for key, value := range unflatmap {
+		subkeys := append(keys, key)
+		if subunflatmap, ok := value.(map[string]interface{}); ok {
+			flattenrec(subunflatmap, subkeys, adder)
+		} else {
+			adder(subkeys, value)
+		}
+	}
 }
