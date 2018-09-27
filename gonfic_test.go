@@ -1,24 +1,24 @@
 package gonfic
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 	"time"
 )
 
 type testValue struct {
-	B bool
-	S string
-	I int
-	U uint
-	F float32
-	M map[string]string
-	A []string
-	D time.Duration
+	B bool `json:"b,omitempty"`
+	S string `json:"s,omitempty"`
+	I int `json:"i,omitempty"`
+	U uint `json:"u,omitempty"`
+	F float32 `json:"f,omitempty"`
+	M map[string]string `json:"m,omitempty"`
+	A []string `json:"a,omitempty"`
+	D time.Duration `json:"d,omitempty"`
 }
 
 type testConfig struct {
-	Values map[string]testValue
+	Values map[string]*testValue `json:"values"`
 }
 
 func TestJSON(t *testing.T) {
@@ -57,6 +57,15 @@ func TestYAML(t *testing.T) {
       - e1
     d: 1m`
 	test(t, buf, "yaml")
+}
+
+func TestStruct(t *testing.T) {
+	in := testConfig{Values: map[string]*testValue{"v1": &testValue{S: "hello world"}}}
+	c := NewConfig()
+	c.AddSource(NewStruckSource(in))
+	out := testConfig{}
+	c.Unmarshal(&out)
+	fmt.Printf("%#v", out)
 }
 
 func test(t *testing.T, buf string, ext string) {

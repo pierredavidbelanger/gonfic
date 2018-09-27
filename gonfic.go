@@ -76,6 +76,23 @@ func decodeHook(srcType  reflect.Type, dstType reflect.Type, v interface{}) (int
 	return v, nil
 }
 
+type structSource struct {
+	s interface{}
+}
+
+func NewStruckSource(s interface{}) Source {
+	return &structSource{s: s}
+}
+
+func (s *structSource) Override(config map[string]interface{}) (map[string]interface{}, error) {
+	buf, err := json.Marshal(s.s)
+	if err != nil {
+		return config, err
+	}
+	bufSource := NewBufSource(buf, "json")
+	return bufSource.Override(config)
+}
+
 type envSource struct {
 	prefix string
 }
