@@ -62,7 +62,7 @@ func (c *Config) Unmarshal(prefix string, v interface{}) error {
 	pfm := c.ToFlatMap()
 	fm := pfm
 	if prefix != "" {
-		fm := make(map[string]interface{}, len(pfm))
+		fm = make(map[string]interface{}, len(pfm))
 		for key, value := range pfm {
 			if !strings.HasPrefix(key, prefix+".") {
 				continue
