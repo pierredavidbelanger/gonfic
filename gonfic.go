@@ -3,13 +3,13 @@ package gonfic
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ghodss/yaml"
 	"github.com/mitchellh/mapstructure"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
-	"github.com/ghodss/yaml"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -56,19 +56,34 @@ func (c *Config) ToHierarchicalMap() map[string]interface{} {
 
 // Unmarshal the keys and values as an hierarchical map
 // and stores the result in the value pointed to by v.
-func (c *Config) Unmarshal(v interface{}) error {
+// if prefix is not empty, only the prefixed keys will be
+// unmarshal.
+func (c *Config) Unmarshal(prefix string, v interface{}) error {
+	pfm := c.ToFlatMap()
+	fm := pfm
+	if prefix != "" {
+		fm := make(map[string]interface{}, len(pfm))
+		for key, value := range pfm {
+			if !strings.HasPrefix(key, prefix+".") {
+				continue
+			}
+			key = strings.TrimPrefix(key, prefix+".")
+			fm[key] = value
+		}
+	}
+	m := unflatten(fm, dotSlicer)
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: decodeHook,
+		DecodeHook:       decodeHook,
 		WeaklyTypedInput: true,
-		Result: v,
+		Result:           v,
 	})
 	if err != nil {
 		return err
 	}
-	return dec.Decode(c.ToHierarchicalMap())
+	return dec.Decode(m)
 }
 
-func decodeHook(srcType  reflect.Type, dstType reflect.Type, v interface{}) (interface{}, error) {
+func decodeHook(srcType reflect.Type, dstType reflect.Type, v interface{}) (interface{}, error) {
 	// not sure this is the way to go
 	if srcType.Kind() == reflect.String && dstType.String() == "time.Duration" {
 		return time.ParseDuration(v.(string))
@@ -77,28 +92,38 @@ func decodeHook(srcType  reflect.Type, dstType reflect.Type, v interface{}) (int
 }
 
 type structSource struct {
-	s interface{}
+	prefix string
+	value  interface{}
 }
 
-func NewStruckSource(s interface{}) Source {
-	return &structSource{s: s}
+func NewStructSource(prefix string, value interface{}) Source {
+	return &structSource{prefix: prefix, value: value}
 }
 
 func (s *structSource) Override(config map[string]interface{}) (map[string]interface{}, error) {
-	buf, err := json.Marshal(s.s)
+	buf, err := json.Marshal(s.value)
 	if err != nil {
 		return config, err
 	}
 	bufSource := NewBufSource(buf, "json")
-	return bufSource.Override(config)
+	fm, err := bufSource.Override(make(map[string]interface{}))
+	if err != nil {
+		return config, err
+	}
+	for key, value := range fm {
+		if s.prefix != "" {
+			key = s.prefix + "." + key
+		}
+		config[key] = value
+	}
+	return config, nil
 }
 
 type envSource struct {
-	prefix string
 }
 
-func NewEnvSource(prefix string) Source {
-	return &envSource{prefix: strings.ToLower(prefix)}
+func NewEnvSource() Source {
+	return &envSource{}
 }
 
 func (s *envSource) Override(config map[string]interface{}) (map[string]interface{}, error) {
@@ -107,10 +132,6 @@ func (s *envSource) Override(config map[string]interface{}) (map[string]interfac
 		key, value := pair[0], pair[1]
 		key = strings.ToLower(key)
 		key = strings.Replace(key, "_", ".", -1)
-		if !strings.HasPrefix(key, s.prefix+".") {
-			continue
-		}
-		key = strings.TrimPrefix(key, s.prefix+".")
 		config[key] = value
 	}
 	return config, nil

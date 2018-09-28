@@ -7,14 +7,14 @@ import (
 )
 
 type testValue struct {
-	B bool `json:"b,omitempty"`
-	S string `json:"s,omitempty"`
-	I int `json:"i,omitempty"`
-	U uint `json:"u,omitempty"`
-	F float32 `json:"f,omitempty"`
+	B bool              `json:"b,omitempty"`
+	S string            `json:"s,omitempty"`
+	I int               `json:"i,omitempty"`
+	U uint              `json:"u,omitempty"`
+	F float32           `json:"f,omitempty"`
 	M map[string]string `json:"m,omitempty"`
-	A []string `json:"a,omitempty"`
-	D time.Duration `json:"d,omitempty"`
+	A []string          `json:"a,omitempty"`
+	D time.Duration     `json:"d,omitempty"`
 }
 
 type testConfig struct {
@@ -60,11 +60,11 @@ func TestYAML(t *testing.T) {
 }
 
 func TestStruct(t *testing.T) {
-	in := testConfig{Values: map[string]*testValue{"v1": &testValue{S: "hello world"}}}
+	in := testConfig{Values: map[string]*testValue{"v1": {S: "hello world"}}}
 	c := NewConfig()
-	c.AddSource(NewStruckSource(in))
+	c.AddSource(NewStructSource("", in))
 	out := testConfig{}
-	c.Unmarshal(&out)
+	c.Unmarshal("", &out)
 	fmt.Printf("%#v", out)
 }
 
@@ -74,12 +74,11 @@ func test(t *testing.T, buf string, ext string) {
 	if err != nil {
 		t.Errorf("unable to add buf (%s) source: %s", ext, err)
 	}
-	err = c.AddSource(NewEnvSource("my"))
 	if err != nil {
 		t.Errorf("unable to add env source: %s", err)
 	}
 	v := new(testConfig)
-	err = c.Unmarshal(v)
+	err = c.Unmarshal("", v)
 	if err != nil {
 		t.Errorf("unable to unmarshal: %s", err)
 	}
