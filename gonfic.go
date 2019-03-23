@@ -114,6 +114,7 @@ func (s *structSource) Override(config map[string]interface{}) (map[string]inter
 		if s.prefix != "" {
 			key = s.prefix + "." + key
 		}
+		key = strings.ToLower(key)
 		config[key] = value
 	}
 	return config, nil
@@ -173,6 +174,7 @@ func (s *bufSource) Override(config map[string]interface{}) (map[string]interfac
 		return config, err
 	}
 	for key, value := range fm {
+		key = strings.ToLower(key)
 		config[key] = value
 	}
 	return config, nil
